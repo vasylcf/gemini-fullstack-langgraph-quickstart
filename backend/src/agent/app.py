@@ -1,7 +1,11 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Body
 from fastapi.staticfiles import StaticFiles
+import networkx as nx
+import json
+
+from src.agent.components.gexf_to_cytoscape import networkx_to_cytoscape_json
 
 # Define the FastAPI app
 app = FastAPI()
@@ -43,3 +47,29 @@ app.mount(
     create_frontend_router(),
     name="frontend",
 )
+
+
+@app.post("/graph_vis")
+def graph_vis(query: str = Body(..., embed=True)):
+    """
+    POST endpoint to visualize a GEXF graph as Cytoscape.js JSON elements.
+    Args:
+        query: Path to the GEXF file (str)
+    Returns:
+        JSON string of Cytoscape elements
+
+    Example:
+        curl -X POST http://127.0.0.1:2024/graph_vis \
+            -H "Content-Type: application/json" \
+            -d '{"query": "/absolute/path/to/your/file.gexf"}'
+    """
+    # You may want to validate or sanitize the input in production
+    # Print the query for debugging
+    print(f"Received query: {query}")
+    gexf_file = "/home/vash/apps/gemini-fullstack-langgraph-quickstart/backend/src/assets/sub_graph_20250611_104001.gexf"
+    path_gexf_file = pathlib.Path(gexf_file)
+    display_label_attribute = 'name'  # or set as needed
+    G = nx.read_gexf(path_gexf_file)
+    cytoscape_elements = networkx_to_cytoscape_json(G, display_label_attribute)
+    elements_json_string = json.dumps(cytoscape_elements, indent=2)
+    return Response(content=elements_json_string, media_type="application/json")

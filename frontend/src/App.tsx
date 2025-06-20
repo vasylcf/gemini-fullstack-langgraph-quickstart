@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ProcessedEvent } from "@/components/ActivityTimeline";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { ChatMessagesView } from "@/components/ChatMessagesView";
+import GraphView from "./components/GraphView";
 
 export default function App() {
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<
@@ -14,6 +15,23 @@ export default function App() {
   >({});
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
+
+  const [graphElements, setGraphElements] = useState<any[]>([]);
+  const [showGraph, setShowGraph] = useState(true);
+
+  const handleUserQuestion = async (question: string) => {
+    // ...existing research logic...
+    // After getting answer, fetch graph:
+    const res = await fetch("http://127.0.0.1:2024/graph_vis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: question }),
+    });
+    if (res.ok) {
+      const elements = await res.json();
+      setGraphElements(elements);
+    }
+  };
 
   const thread = useStream<{
     messages: Message[];
@@ -97,6 +115,20 @@ export default function App() {
           ...prev,
           [lastMessage.id!]: [...processedEventsTimeline],
         }));
+        // ADD THIS: fetch graph for the last user question
+        const lastUserMessage = thread.messages
+          .slice()
+          .reverse()
+          .find((msg) => msg.type === "human");
+        if (lastUserMessage) {
+          fetch("http://127.0.0.1:2024/graph_vis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: lastUserMessage.content }),
+          })
+            .then((res) => res.json())
+            .then((elements) => setGraphElements(elements));
+        }
       }
       hasFinalizeEventOccurredRef.current = false;
     }
@@ -153,7 +185,18 @@ export default function App() {
   }, [thread]);
 
   return (
-    <div className="flex h-screen bg-neutral-800 text-neutral-100 font-sans antialiased">
+   <div style={{ display: "flex", height: "100vh" }}>
+      {showGraph && (
+        <div style={{ width: "40%", minWidth: 300, borderRight: "1px solid #333" }}>
+          <button onClick={() => setShowGraph(false)}>Collapse</button>
+          <GraphView elements={graphElements} />
+        </div>
+      )}
+      <div style={{ flex: 1 }}>
+        {!showGraph && (
+          <button onClick={() => setShowGraph(true)}>Show Graph</button>
+        )}
+         <div className="flex h-screen bg-neutral-800 text-neutral-100 font-sans antialiased">
       <main className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full">
         <div
           className={`flex-1 overflow-y-auto ${
@@ -179,6 +222,8 @@ export default function App() {
           )}
         </div>
       </main>
+    </div>
+      </div>
     </div>
   );
 }
